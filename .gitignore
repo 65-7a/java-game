@@ -2,3 +2,5 @@
 /.gradle/
 /build/
 /build/classes/java/main/
+lwjgl64.dll
+OpenAL64.dll
