@@ -17,52 +17,92 @@
 
 package com.callumwong.javagame;
 
-import com.jme3.app.DebugKeysAppState;
-import com.jme3.app.FlyCamAppState;
-import com.jme3.app.SimpleApplication;
-import com.jme3.app.StatsAppState;
-import com.jme3.app.state.ConstantVerifierState;
-import com.jme3.audio.AudioListenerState;
-import com.jme3.material.Material;
-import com.jme3.math.ColorRGBA;
-import com.jme3.math.Vector3f;
-import com.jme3.scene.Geometry;
-import com.jme3.scene.Node;
-import com.jme3.scene.shape.Box;
+import org.lwjgl.Version;
+import org.lwjgl.glfw.GLFWErrorCallback;
+import org.lwjgl.glfw.GLFWVidMode;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.system.MemoryStack;
 
-public class Main extends SimpleApplication {
-    public Main() {
-        super(new StatsAppState(), new FlyCamAppState(), new AudioListenerState(), new DebugKeysAppState(), new ConstantVerifierState());
-    }
+import java.nio.IntBuffer;
+
+import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
+import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.system.MemoryStack.stackPush;
+import static org.lwjgl.system.MemoryUtil.NULL;
+
+public class Main {
+    // The window handle
+    private long window;
 
     public static void main(String[] args) {
-        Main app = new Main();
-        app.start();
+        new Main().run();
     }
 
-    @Override
-    public void simpleInitApp() {
-        Box box1 = new Box(1,1,1);
-        Geometry blue = new Geometry("Box", box1);
-        blue.setLocalTranslation(new Vector3f(1,-1,1));
-        Material mat1 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat1.setColor("Color", ColorRGBA.Blue);
-        blue.setMaterial(mat1);
+    public void run() {
+        System.out.println("Hello LWJGL " + Version.getVersion() + "!");
 
-        Box box2 = new Box(1,1,1);
-        Geometry red = new Geometry("Box", box2);
-        red.setLocalTranslation(new Vector3f(1,1,1));
-        Material mat2 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat2.setColor("Color", ColorRGBA.Red);
-        red.setMaterial(mat2);
+        init();
+        loop();
 
-        Node pivot = new Node("pivot");
-        rootNode.attachChild(pivot);
+        // Free the window callbacks and destroy the window
+        glfwFreeCallbacks(window);
+        glfwDestroyWindow(window);
 
-        pivot.attachChild(blue);
-        pivot.attachChild(red);
-        pivot.rotate(.4f,.4f,0f);
+        // Terminate GLFW and free the error callback
+        glfwTerminate();
+        glfwSetErrorCallback(null).free();
+    }
 
-        flyCam.setMoveSpeed(10f);
+    private void init() {
+        // Setup an error callback.
+        GLFWErrorCallback.createPrint(System.err).set();
+
+        // Initialize GLFW.
+        if (!glfwInit()) throw new IllegalStateException("Unable to initialize GLFW");
+
+        // Configure GLFW
+        glfwDefaultWindowHints();
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+
+        // Create the window
+        window = glfwCreateWindow(300, 300, "Hello World!", NULL, NULL);
+        if (window == NULL) throw new RuntimeException("Failed to create the GLFW window");
+
+        // Called on key press
+        glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) glfwSetWindowShouldClose(window, true); // We will detect this in the rendering loop
+        });
+
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer pWidth = stack.mallocInt(1);
+            IntBuffer pHeight = stack.mallocInt(1);
+
+            // Get the window size passed to glfwCreateWindow
+            glfwGetWindowSize(window, pWidth, pHeight);
+
+            // Get resolution of monitor
+            GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+
+            // Center the window
+            glfwSetWindowPos(window, (vidmode.width() - pWidth.get(0)) / 2, (vidmode.height() - pHeight.get(0)) / 2);
+        }
+
+        glfwMakeContextCurrent(window);
+        glfwSwapInterval(1); // Enable V-Sync
+        glfwShowWindow(window); // Make window visible
+    }
+
+    private void loop() {
+        GL.createCapabilities();
+        glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+
+        // Rendering loop
+        while (!glfwWindowShouldClose(window)) {
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        }
     }
 }
