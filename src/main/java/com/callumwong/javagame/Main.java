@@ -17,52 +17,140 @@
 
 package com.callumwong.javagame;
 
-import com.jme3.app.DebugKeysAppState;
-import com.jme3.app.FlyCamAppState;
 import com.jme3.app.SimpleApplication;
-import com.jme3.app.StatsAppState;
-import com.jme3.app.state.ConstantVerifierState;
-import com.jme3.audio.AudioListenerState;
+import com.jme3.bounding.BoundingBox;
+import com.jme3.bullet.BulletAppState;
+import com.jme3.bullet.collision.shapes.CapsuleCollisionShape;
+import com.jme3.bullet.collision.shapes.CollisionShape;
+import com.jme3.bullet.control.CharacterControl;
+import com.jme3.bullet.control.RigidBodyControl;
+import com.jme3.bullet.util.CollisionShapeFactory;
+import com.jme3.input.KeyInput;
+import com.jme3.input.controls.ActionListener;
+import com.jme3.input.controls.KeyTrigger;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
-import com.jme3.scene.Node;
+import com.jme3.scene.Spatial;
+import com.jme3.scene.debug.WireBox;
 import com.jme3.scene.shape.Box;
 
 public class Main extends SimpleApplication {
-    public Main() {
-        super(new StatsAppState(), new FlyCamAppState(), new AudioListenerState(), new DebugKeysAppState(), new ConstantVerifierState());
-    }
+    private CharacterControl player;
+    private Vector3f walkDirection = new Vector3f();
+    private boolean left = false, right = false, up = false, down = false;
+    private float prevY;
 
     public static void main(String[] args) {
         Main app = new Main();
         app.start();
     }
 
-    @Override
     public void simpleInitApp() {
-        Box box1 = new Box(1,1,1);
-        Geometry blue = new Geometry("Box", box1);
-        blue.setLocalTranslation(new Vector3f(1,-1,1));
-        Material mat1 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat1.setColor("Color", ColorRGBA.Blue);
-        blue.setMaterial(mat1);
+        BulletAppState bulletAppState = new BulletAppState();
+        stateManager.attach(bulletAppState);
+//        bulletAppState.setDebugEnabled(true);
 
-        Box box2 = new Box(1,1,1);
-        Geometry red = new Geometry("Box", box2);
-        red.setLocalTranslation(new Vector3f(1,1,1));
-        Material mat2 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat2.setColor("Color", ColorRGBA.Red);
-        red.setMaterial(mat2);
+        // Use the flycam for rotation only
+        viewPort.setBackgroundColor(ColorRGBA.Black);
+        flyCam.setMoveSpeed(100);
 
-        Node pivot = new Node("pivot");
-        rootNode.attachChild(pivot);
+        setupKeys();
 
-        pivot.attachChild(blue);
-        pivot.attachChild(red);
-        pivot.rotate(.4f,.4f,0f);
+        Box b = new Box(10, 1, 10);
+        BoundingBox bb = (BoundingBox) b.getBound();
+        WireBox wb = new WireBox(bb.getXExtent(), bb.getYExtent(), bb.getZExtent());
+        Spatial sceneModel = new Geometry("Box", wb);
+        sceneModel.setLocalTranslation(0, 0, 0);
+        Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setColor("Color", ColorRGBA.Green);
+        sceneModel.setMaterial(mat);
 
-        flyCam.setMoveSpeed(10f);
+        // Setting up collision for the scene
+        CollisionShape sceneShape = CollisionShapeFactory.createMeshShape(new Geometry("Box", b));
+        RigidBodyControl landscape = new RigidBodyControl(sceneShape, 0);
+        sceneModel.addControl(landscape);
+
+        CapsuleCollisionShape capsuleShape = new CapsuleCollisionShape(1f, 5f, 1);
+        player = new CharacterControl(capsuleShape, 0.05f);
+        player.setJumpSpeed(20);
+        player.setFallSpeed(40);
+
+        rootNode.attachChild(sceneModel);
+        bulletAppState.getPhysicsSpace().add(landscape);
+        bulletAppState.getPhysicsSpace().add(player);
+
+        player.setGravity(new Vector3f(0, -40f, 0));
+        player.setPhysicsLocation(new Vector3f(0, 10, 0));
+    }
+
+    private void setupKeys() {
+        inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A));
+        inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D));
+        inputManager.addMapping("Up", new KeyTrigger(KeyInput.KEY_W));
+        inputManager.addMapping("Down", new KeyTrigger(KeyInput.KEY_S));
+        inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
+        inputManager.addListener(actionListener, "Left");
+        inputManager.addListener(actionListener, "Right");
+        inputManager.addListener(actionListener, "Up");
+        inputManager.addListener(actionListener, "Down");
+        inputManager.addListener(actionListener, "Jump");
+    }
+
+    private final ActionListener actionListener = new ActionListener() {
+        @Override
+        public void onAction(String binding, boolean isPressed, float tpf) {
+            switch (binding) {
+                case "Left":
+                    left = isPressed;
+                    break;
+                case "Right":
+                    right = isPressed;
+                    break;
+                case "Up":
+                    up = isPressed;
+                    break;
+                case "Down":
+                    down = isPressed;
+                    break;
+                case "Jump":
+                    if (player.onGround()) {
+                        if (isPressed) {
+                            player.jump(new Vector3f(0, 20f, 0));
+                        }
+                    }
+                    break;
+            }
+        }
+    };
+
+    @Override
+    public void simpleUpdate(float tpf) {
+        Vector3f camDir = cam.getDirection().clone();
+        Vector3f camLeft = cam.getLeft().clone();
+        camDir.multLocal(0.3f);
+        camLeft.multLocal(0.2f);
+        camDir.y = 0;
+        camLeft.y = 0;
+        camDir.normalizeLocal();
+        camLeft.normalizeLocal();
+        walkDirection.set(0, 0, 0);
+
+        if (left) {
+            walkDirection.addLocal(camLeft);
+        }
+        if (right) {
+            walkDirection.addLocal(camLeft.negate());
+        }
+        if (up) {
+            walkDirection.addLocal(camDir);
+        }
+        if (down) {
+            walkDirection.addLocal(camDir.negate());
+        }
+
+        player.setWalkDirection(walkDirection);
+        cam.setLocation(player.getPhysicsLocation());
     }
 }

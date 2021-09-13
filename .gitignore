@@ -2,5 +2,8 @@
 /.gradle/
 /build/
 /build/classes/java/main/
+/out/
+/.idea/
 lwjgl64.dll
 OpenAL64.dll
+bulletjme.dll
